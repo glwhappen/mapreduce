@@ -23,6 +23,8 @@ import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.lib.jobcontrol.ControlledJob;
+import org.apache.hadoop.mapreduce.lib.jobcontrol.JobControl;
 
 public class CommonFriends {
 	public static class CommonFriendsMapper1
@@ -100,7 +102,6 @@ public class CommonFriends {
 		}
 		FileInputFormat.addInputPath(job1, inputPath);
 		FileOutputFormat.setOutputPath(job1, tempPath);
-		job1.waitForCompletion(true);
 		
 
 		Job job2 = Job.getInstance(conf);
@@ -120,6 +121,23 @@ public class CommonFriends {
 		FileInputFormat.addInputPath(job2, tempFile);
 		FileOutputFormat.setOutputPath(job2, outputPath);
 
-		System.exit(job2.waitForCompletion(true) ? 0 : 1);
+		ControlledJob step1Job = new ControlledJob(job1.getConfiguration());
+		ControlledJob step2Job = new ControlledJob(job2.getConfiguration());
+		step1Job.setJob(job1);
+		step2Job.setJob(job2);
+
+		step2Job.addDependingJob(step1Job);
+
+		JobControl jc = new JobControl("CommonFriends");
+		jc.addJob(step1Job);
+		jc.addJob(step2Job);
+
+		Thread jobThread = new Thread(jc);
+		jobThread.start();
+
+		while(!jc.allFinished()) {
+			Thread.sleep(500);
+		}
+		System.exit(0);
 	}
 }
